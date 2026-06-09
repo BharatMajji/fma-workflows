@@ -1,0 +1,87 @@
+name: FMA Generate (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      fma_id:
+        description: 'FMA ID from backend (correlation key)'
+        required: true
+        type: string
+      service_name:
+        description: 'Service name (becomes default component tag)'
+        required: true
+        type: string
+      service_description:
+        description: 'Short text describing what the service does'
+        required: false
+        type: string
+        default: ''
+      mermaid_diagram:
+        description: 'Architecture diagram (mermaid text)'
+        required: false
+        type: string
+        default: ''
+      dedupe_context_json:
+        description: 'JSON: { existingFindings: [...], openActionItems: [...] }'
+        required: false
+        type: string
+        default: '{}'
+      prompt:
+        description: 'Full prompt body (filtering + schema + reasoning rules)'
+        required: true
+        type: string
+      depth:
+        description: 'quick | standard | deep'
+        required: false
+        type: string
+        default: 'standard'
+    secrets:
+      COPILOT_PAT:
+        required: true
+
+jobs:
+  generate-findings:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout caller repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install GitHub Copilot CLI
+        run: npm install -g @github/copilot
+
+      - name: Prepare context files
+        run: |
+          mkdir -p .fma-context fma-output
+          printf '%s' "${{ inputs.service_description }}" > .fma-context/description.md
+          printf '%s' "${{ inputs.mermaid_diagram }}"     > .fma-context/mermaid.md
+          printf '%s' '${{ inputs.dedupe_context_json }}' > .fma-context/dedupe.json
+          printf '%s' "${{ inputs.prompt }}"              > .fma-context/prompt.md
+          cat <<EOF > .fma-context/meta.json
+          {
+            "fmaId": "${{ inputs.fma_id }}",
+            "serviceName": "${{ inputs.service_name }}",
+            "depth": "${{ inputs.depth }}"
+          }
+          EOF
+
+      - name: Run fma-identify skill
+        env:
+          GITHUB_TOKEN: ${{ secrets.COPILOT_PAT }}
+        run: |
+          copilot /fma-identify \
+            --output fma-output/findings.json \
+            --context-dir .fma-context
+
+      - name: Upload findings.json artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fma-findings
+          path: fma-output/findings.json
+          if-no-files-found: error
+          retention-days: 7
