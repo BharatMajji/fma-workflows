@@ -85,11 +85,19 @@ jobs:
             echo "## Backend instructions (authoritative)"
             echo "$BACKEND_PROMPT"
             echo
-            echo "## Output location (MANDATORY - overrides any stdout wording above)"
-            echo "Follow the instructions in .claude/skills/fma-identify/SKILL.md."
-            echo "You MUST create the directory fma-output/ and WRITE the final JSON"
-            echo "object to the file fma-output/findings.json. Do NOT only print it to"
-            echo "stdout. Do NOT ask any questions. Output nothing else."
+            echo "## Execution override (MANDATORY - takes precedence over the skill's own steps)"
+            echo "Run the fma-identify skill in .claude/skills/fma-identify/SKILL.md to"
+            echo "DISCOVER failure modes only: read docs/fma/current/component-mapping.yaml,"
+            echo "scan the mapped source files, analyse the failure modes, and assign"
+            echo "impact / likelihood / priority."
+            echo "Then APPLY these overrides - they WIN over anything in the skill:"
+            echo "  - Do NOT write any Markdown (nothing under docs/fma/current/*.md)."
+            echo "  - Do NOT run generate-excel.py or any other script."
+            echo "  - Do NOT print a discovery report."
+            echo "  - Do NOT create or modify ANY file except fma-output/findings.json."
+            echo "Write ALL findings as ONE strict JSON object {\"findings\":[...]} to"
+            echo "fma-output/findings.json, matching the schema in the backend"
+            echo "instructions above. Output nothing else. Ask no questions."
           } > /tmp/full-prompt.md
           echo "::group::Assembled prompt size"
           wc -c /tmp/full-prompt.md
@@ -108,6 +116,7 @@ jobs:
             --no-color \
             --allow-tool read \
             --allow-tool write \
+            --allow-tool shell \
             2>&1 | tee /tmp/copilot-output.log
 
       - name: Verify findings.json exists
