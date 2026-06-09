@@ -17,7 +17,7 @@ on:
         type: string
         default: ''
       mermaid_diagram:
-        description: 'Architecture diagram (mermaid text)'
+        description: 'Architecture diagram (mermaid text; backend converts uploaded images to mermaid first)'
         required: false
         type: string
         default: ''
@@ -38,6 +38,9 @@ on:
     secrets:
       COPILOT_PAT:
         required: true
+
+permissions:
+  contents: read
 
 jobs:
   generate-findings:
@@ -81,6 +84,12 @@ jobs:
             echo
             echo "## Backend instructions (authoritative)"
             echo "$BACKEND_PROMPT"
+            echo
+            echo "## Output location (MANDATORY - overrides any stdout wording above)"
+            echo "Follow the instructions in .claude/skills/fma-identify/SKILL.md."
+            echo "You MUST create the directory fma-output/ and WRITE the final JSON"
+            echo "object to the file fma-output/findings.json. Do NOT only print it to"
+            echo "stdout. Do NOT ask any questions. Output nothing else."
           } > /tmp/full-prompt.md
           echo "::group::Assembled prompt size"
           wc -c /tmp/full-prompt.md
@@ -88,15 +97,24 @@ jobs:
 
       - name: Run fma-identify skill
         env:
-          GITHUB_TOKEN: ${{ secrets.COPILOT_PAT }}
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_PAT }}
+          GITHUB_TOKEN:         ${{ secrets.COPILOT_PAT }}
         run: |
-          copilot /fma-identify "$(cat /tmp/full-prompt.md)"
+          set -o pipefail
+          copilot -p "$(cat /tmp/full-prompt.md)" \
+            --no-ask-user \
+            --allow-all-paths \
+            -s \
+            --no-color \
+            --allow-tool read \
+            --allow-tool write \
+            2>&1 | tee /tmp/copilot-output.log
 
       - name: Verify findings.json exists
         run: |
           if [ ! -s fma-output/findings.json ]; then
-            echo "::error::findings.json missing or empty — model may have written markdown instead. Check docs/fma/current/ in run logs."
-            ls -la docs/fma/current/ 2>/dev/null || true
+            echo "::error::findings.json missing or empty - model may have written markdown instead. See copilot log artifact."
+            tail -n 80 /tmp/copilot-output.log 2>/dev/null || true
             exit 1
           fi
           echo "::group::findings.json preview"
@@ -110,3 +128,11 @@ jobs:
           path: fma-output/findings.json
           if-no-files-found: error
           retention-days: 7
+
+      - name: Upload copilot log (debug)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: copilot-log
+          path: /tmp/copilot-output.log
+          if-no-files-found: ignore
