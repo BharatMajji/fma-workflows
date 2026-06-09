@@ -97,7 +97,12 @@ jobs:
             echo "  - Do NOT create or modify ANY file except fma-output/findings.json."
             echo "Write ALL findings as ONE strict JSON object {\"findings\":[...]} to"
             echo "fma-output/findings.json, matching the schema in the backend"
-            echo "instructions above. Output nothing else. Ask no questions."
+            echo "instructions above."
+            echo "FIELD TYPES: component, failureMode, detectionStrategy,"
+            echo "monitoringScenarios, recoverySteps, recommendation, priority are"
+            echo "single STRINGS (not arrays). If you have multiple points, join them"
+            echo "with '; ' in one string. impact and likelihood are integers 1-5."
+            echo "affectedFiles is the ONLY array. Output nothing else. Ask no questions."
           } > /tmp/full-prompt.md
           echo "::group::Assembled prompt size"
           wc -c /tmp/full-prompt.md
@@ -105,10 +110,15 @@ jobs:
 
       - name: Run fma-identify skill
         env:
+          # The Copilot CLI authenticates with this token. COPILOT_GITHUB_TOKEN is
+          # the variable the CLI actually reads (matches the FMA backend's
+          # copilotRunner). GITHUB_TOKEN is kept for any gh-based calls.
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_PAT }}
           GITHUB_TOKEN:         ${{ secrets.COPILOT_PAT }}
         run: |
           set -o pipefail
+          # Non-interactive flags are REQUIRED so the run never blocks on an
+          # approval prompt and the skill is allowed to WRITE fma-output/findings.json.
           copilot -p "$(cat /tmp/full-prompt.md)" \
             --no-ask-user \
             --allow-all-paths \
