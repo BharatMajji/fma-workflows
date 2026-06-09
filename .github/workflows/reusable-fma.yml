@@ -102,7 +102,9 @@ jobs:
             echo "monitoringScenarios, recoverySteps, recommendation, priority are"
             echo "single STRINGS (not arrays). If you have multiple points, join them"
             echo "with '; ' in one string. impact and likelihood are integers 1-5."
-            echo "affectedFiles is the ONLY array. Output nothing else. Ask no questions."
+            echo "ARRAYS: affectedFiles (path + signal) AND actionItems (1-3 short,"
+            echo "imperative, specific fixes that each directly remove this failure)."
+            echo "Output nothing else. Ask no questions."
           } > /tmp/full-prompt.md
           echo "::group::Assembled prompt size"
           wc -c /tmp/full-prompt.md
